@@ -85,7 +85,9 @@ def lookup_clinvar(rsid: str, timeout: int = 20) -> ClinVarRecord:
     search_term = f"{rsid}[Variant Name] OR {rsid}"
 
     handle = Entrez.esearch(db="clinvar", term=search_term, retmax=1)
-    search = Entrez.read(handle)
+    # validate=False: NCBI adds new XML tags (e.g. 'common_name') faster than
+    # Biopython updates its bundled DTDs, so strict validation breaks parsing.
+    search = Entrez.read(handle, validate=False)
     handle.close()
 
     id_list = search.get("IdList", [])
@@ -96,7 +98,7 @@ def lookup_clinvar(rsid: str, timeout: int = 20) -> ClinVarRecord:
 
     # esummary returns the rich record (significance, review status, conditions).
     handle = Entrez.esummary(db="clinvar", id=variation_id)
-    summary = Entrez.read(handle)
+    summary = Entrez.read(handle, validate=False)
     handle.close()
 
     # The esummary structure for clinvar nests the useful bits under
