@@ -44,19 +44,42 @@ def _roll_up_effect(verdict: VariantVerdict) -> EffectDirection:
     return EffectDirection.UNKNOWN
 
 
+# Substrings that mark a trait as a biomarker / quantitative measurement rather
+# than a disease. Cheap heuristic; covers the long tail of EFO/OBA measurement
+# terms ("protein measurement", "phospholipid amount", "...percentage", etc.).
+_MEASUREMENT_TOKENS = ("measurement", "amount", "level", "concentration", "percentage")
+
+
+def _is_disease_uri(uri: str | None) -> bool:
+    """MONDO IDs denote diseases by construction; the strongest disease signal."""
+    return bool(uri) and "MONDO_" in uri
+
+
+def _is_measurement_trait(trait: str | None) -> bool:
+    if not trait:
+        return False
+    t = trait.lower()
+    return any(tok in t for tok in _MEASUREMENT_TOKENS)
+
+
 def _pick_summary_trait(verdict: VariantVerdict) -> str:
     """
     Choose the most informative trait for the one-line summary.
 
-    Preference:
-      1. First curated ClinVar condition (disease-specific).
-      2. GWAS trait with the lowest p-value among associations whose direction
-         matches the overall_effect (when that effect is RISK or PROTECTIVE).
-         This avoids picking an arbitrary first-in-list trait for pleiotropic
-         variants like APOE, where the first hit may be a weak measurement
-         while a much stronger disease association is buried further down.
-      3. GWAS trait with the lowest p-value overall.
-      4. The literal "reported traits" fallback.
+    Why this is fussy: a pure lowest-p-value rule systematically buries
+    disease hits for pleiotropic variants like APOE, because pQTL/eQTL/
+    biomarker associations almost always have crushingly lower p-values
+    than disease associations (molecular phenotypes are easier to measure).
+    So we prefer disease-ontology hits over measurement hits before
+    applying the p-value tiebreak.
+
+    Preference, after filtering to associations matching overall_effect:
+      1. First curated ClinVar condition.
+      2. GWAS hits with a MONDO disease URI -> lowest p-value wins.
+      3. GWAS hits whose trait does NOT look like a biomarker -> lowest p.
+         Catches diseases that live under EFO instead of MONDO.
+      4. Any remaining GWAS hit -> lowest p-value (includes biomarkers).
+      5. Literal "reported traits" fallback.
     """
     cv = verdict.clinvar
     if cv and cv.conditions:
@@ -69,8 +92,16 @@ def _pick_summary_trait(verdict: VariantVerdict) -> str:
             directional = [g for g in scorable if g.effect == direction]
             if directional:
                 scorable = directional
-        if scorable:
-            return min(scorable, key=lambda g: g.p_value).trait
+
+        tiers = (
+            [g for g in scorable if _is_disease_uri(g.mapped_trait_uri)],
+            [g for g in scorable if not _is_measurement_trait(g.trait)],
+            scorable,
+        )
+        for tier in tiers:
+            if tier:
+                return min(tier, key=lambda g: g.p_value).trait
+
         for g in verdict.gwas:
             if g.trait:
                 return g.trait
