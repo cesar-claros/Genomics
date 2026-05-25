@@ -10,10 +10,10 @@ separately with a real rsID once your node is online — see the bottom of this
 file for that manual check.
 """
 
-from genomic_rag.lookup.clinvar import _review_status_to_stars, _significance_to_effect
-from genomic_rag.lookup.combine import _roll_up_effect, _summarize
-from genomic_rag.lookup.gwas import _effect_from_or
-from genomic_rag.lookup.models import ClinVarRecord, EffectDirection, GwasAssociation, VariantVerdict
+from lookup.clinvar import _review_status_to_stars, _significance_to_effect
+from lookup.combine import _roll_up_effect, _summarize
+from lookup.gwas import _effect_from_or
+from lookup.models import ClinVarRecord, EffectDirection, GwasAssociation, VariantVerdict
 
 
 def test_significance_mapping():
@@ -106,6 +106,6 @@ if __name__ == "__main__":
     print("\nAll pure-logic tests passed.")
     print(
         "\nNext, with internet + .env set, run the live check:\n"
-        "    python -m genomic_rag.lookup.combine rs429358\n"
+        "    python -m lookup.combine rs429358\n"
         "Expect: ClinVar APOE/Alzheimer association, effect=risk_increasing."
     )
