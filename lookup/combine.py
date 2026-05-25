@@ -44,16 +44,45 @@ def _roll_up_effect(verdict: VariantVerdict) -> EffectDirection:
     return EffectDirection.UNKNOWN
 
 
+def _pick_summary_trait(verdict: VariantVerdict) -> str:
+    """
+    Choose the most informative trait for the one-line summary.
+
+    Preference:
+      1. First curated ClinVar condition (disease-specific).
+      2. GWAS trait with the lowest p-value among associations whose direction
+         matches the overall_effect (when that effect is RISK or PROTECTIVE).
+         This avoids picking an arbitrary first-in-list trait for pleiotropic
+         variants like APOE, where the first hit may be a weak measurement
+         while a much stronger disease association is buried further down.
+      3. GWAS trait with the lowest p-value overall.
+      4. The literal "reported traits" fallback.
+    """
+    cv = verdict.clinvar
+    if cv and cv.conditions:
+        return cv.conditions[0]
+
+    if verdict.gwas:
+        scorable = [g for g in verdict.gwas if g.trait and g.p_value is not None]
+        direction = verdict.overall_effect
+        if direction in (EffectDirection.RISK, EffectDirection.PROTECTIVE):
+            directional = [g for g in scorable if g.effect == direction]
+            if directional:
+                scorable = directional
+        if scorable:
+            return min(scorable, key=lambda g: g.p_value).trait
+        for g in verdict.gwas:
+            if g.trait:
+                return g.trait
+
+    return "reported traits"
+
+
 def _summarize(verdict: VariantVerdict) -> str:
     """A neutral one-liner. Deliberately avoids clinical/imperative language."""
     rsid = verdict.rsid or verdict.query
     effect = verdict.overall_effect
-
-    cv = verdict.clinvar
-    conditions = cv.conditions if cv else []
-    cond_str = conditions[0] if conditions else (
-        verdict.gwas[0].trait if verdict.gwas and verdict.gwas[0].trait else "reported traits"
-    )
+    cond_str = _pick_summary_trait(verdict)
 
     phrasing = {
         EffectDirection.RISK: f"{rsid} is associated with increased risk related to {cond_str}",
