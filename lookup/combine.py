@@ -96,14 +96,3 @@ def lookup_variant(
     verdict.overall_effect = _roll_up_effect(verdict)
     verdict.summary = _summarize(verdict)
     return verdict
-
-
-if __name__ == "__main__":
-    # Smoke test: run on the command line once your node has internet + .env set.
-    #   python -m genomic_rag.lookup.combine rs429358
-    import json
-    import sys
-
-    query = sys.argv[1] if len(sys.argv) > 1 else "rs429358"
-    result = lookup_variant(query)
-    print(json.dumps(result.model_dump(), indent=2, default=str))
