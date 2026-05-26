@@ -10,10 +10,20 @@ Examples:
 
 from __future__ import annotations
 
-import json
-import sys
+# Load code/.env BEFORE other imports so env vars consumed at module-load
+# time (e.g. NCBI_EMAIL in lookup/clinvar.py) see the .env-supplied values.
+from pathlib import Path
 
-from .combine import extract_and_lookup
+from dotenv import load_dotenv
+
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
+
+import json  # noqa: E402
+import sys  # noqa: E402
+
+from .combine import extract_and_lookup  # noqa: E402
 
 text = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read()
 result = extract_and_lookup(text)

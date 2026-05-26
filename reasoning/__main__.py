@@ -16,15 +16,26 @@ Environment:
 
 from __future__ import annotations
 
-import argparse
-import json
-import re
-import sys
+# Load code/.env BEFORE other imports so env vars consumed at module-load
+# time (e.g. NCBI_EMAIL in lookup/clinvar.py, REASONING_MODEL in
+# reasoning/backend.py) see the .env-supplied values.
+from pathlib import Path
 
-from extract.combine import extract_and_lookup
-from lookup.combine import lookup_variant
+from dotenv import load_dotenv
 
-from .synthesize import synthesize
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
+
+import argparse  # noqa: E402
+import json  # noqa: E402
+import re  # noqa: E402
+import sys  # noqa: E402
+
+from extract.combine import extract_and_lookup  # noqa: E402
+from lookup.combine import lookup_variant  # noqa: E402
+
+from .synthesize import synthesize  # noqa: E402
 
 _RSID_ONLY_RE = re.compile(r"^\s*rs\d+\s*$", re.IGNORECASE)
 
