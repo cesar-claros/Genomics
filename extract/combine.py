@@ -66,6 +66,24 @@ def _nearest_gene(
     return best_symbol
 
 
+def _canonicalize_gene(surface: str | None) -> str | None:
+    """Resolve a gene surface form to its HGNC approved symbol.
+
+    Fail-soft: if HGNC is unavailable (TSV download fails, file missing,
+    no match), returns the original surface unchanged. The lazy import
+    keeps the one-time HGNC TSV download out of extract module init when
+    callers disable normalization.
+    """
+    if not surface:
+        return None
+    try:
+        from normalize.genes import normalize_gene
+
+        return normalize_gene(surface).symbol or surface
+    except Exception:  # noqa: BLE001 - fail soft
+        return surface
+
+
 def extract_and_lookup(
     text: str,
     *,
@@ -73,6 +91,7 @@ def extract_and_lookup(
     dedupe: bool = True,
     use_clinvar: bool = True,
     use_gwas: bool = True,
+    normalize_genes: bool = True,
 ) -> PipelineResult:
     """
     Run extraction over `text`, then look up each variant mention.
@@ -81,6 +100,10 @@ def extract_and_lookup(
     `gene_proximity` characters (~ one sentence), whose symbol is passed as
     context to lookup_variant. If `dedupe`, repeated rsIDs in the same text
     are looked up once.
+
+    If `normalize_genes`, the paired gene surface form is run through
+    HGNC alias resolution before being attached to the verdict. Disable
+    to skip the (one-time) HGNC TSV download and use the raw NER output.
     """
     mentions = extract_mentions(text)
 
@@ -90,7 +113,8 @@ def extract_and_lookup(
         if dedupe and v.rsid in seen:
             continue
         seen.add(v.rsid)
-        gene = _nearest_gene(v, mentions.genes, gene_proximity)
+        gene_surface = _nearest_gene(v, mentions.genes, gene_proximity)
+        gene = _canonicalize_gene(gene_surface) if normalize_genes else gene_surface
         verdicts.append(
             lookup_variant(
                 v.rsid,

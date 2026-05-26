@@ -64,24 +64,71 @@ def _upsert_variant_and_gene(tx, verdict: VariantVerdict) -> None:
         )
 
 
-def _upsert_clinvar_conditions(tx, verdict: VariantVerdict) -> None:
+def _canonicalize_diseases(verdict: VariantVerdict) -> dict[str, dict[str, str | None]]:
+    """Run MONDO normalization on every disease-flavored mention in the verdict.
+
+    Returns a dict keyed by the surface name (the exact string we MERGE on)
+    whose value carries the MONDO ID, canonical label, and IRI when
+    available. Surfaces with no match map to an entry with all-None values.
+
+    Fail-soft: if the OLS API is unreachable, returns {} and Disease nodes
+    are MERGEd without canonical IDs (same as pre-integration behavior).
+    """
+    try:
+        from normalize.combine import normalize_verdict_diseases
+
+        normalized = normalize_verdict_diseases(verdict)
+    except Exception:  # noqa: BLE001 - fail soft
+        return {}
+
+    return {
+        nd.surface: {
+            "mondo_id": nd.mondo_id,
+            "canonical_label": nd.label,
+            "iri": nd.iri,
+        }
+        for nd in normalized
+    }
+
+
+def _upsert_clinvar_conditions(
+    tx,
+    verdict: VariantVerdict,
+    disease_norm: dict[str, dict[str, str | None]] | None = None,
+) -> None:
     cv = verdict.clinvar
     if cv is None or not cv.conditions:
         return
     rsid = (verdict.rsid or verdict.query).strip().lower()
+
+    rows = []
+    for cond in cv.conditions:
+        info = (disease_norm or {}).get(cond, {})
+        rows.append(
+            {
+                "name": cond,
+                "mondo_id": info.get("mondo_id"),
+                "canonical_label": info.get("canonical_label"),
+                "iri": info.get("iri"),
+            }
+        )
+
     tx.run(
         """
-        UNWIND $conditions AS cond
+        UNWIND $rows AS row
         MERGE (v:Variant {rsid: $rsid})
-        MERGE (d:Disease {name: cond})
+        MERGE (d:Disease {name: row.name})
+        SET d.mondo_id        = coalesce(row.mondo_id, d.mondo_id),
+            d.canonical_label = coalesce(row.canonical_label, d.canonical_label),
+            d.iri             = coalesce(row.iri, d.iri)
         MERGE (v)-[r:HAS_CLINVAR_CONDITION]->(d)
-        SET r.review_stars = $review_stars,
-            r.significance = $significance,
+        SET r.review_stars  = $review_stars,
+            r.significance  = $significance,
             r.review_status = $review_status,
-            r.effect       = $effect
+            r.effect        = $effect
         """,
         rsid=rsid,
-        conditions=cv.conditions,
+        rows=rows,
         review_stars=cv.review_stars,
         significance=cv.clinical_significance,
         review_status=cv.review_status,
@@ -89,13 +136,18 @@ def _upsert_clinvar_conditions(tx, verdict: VariantVerdict) -> None:
     )
 
 
-def _upsert_gwas_associations(tx, verdict: VariantVerdict) -> None:
+def _upsert_gwas_associations(
+    tx,
+    verdict: VariantVerdict,
+    disease_norm: dict[str, dict[str, str | None]] | None = None,
+) -> None:
     if not verdict.gwas:
         return
     rsid = (verdict.rsid or verdict.query).strip().lower()
 
     # Split into disease (MONDO) hits and other (EFO measurement, OBA, etc.)
-    # so each goes to a node with the right label.
+    # so each goes to a node with the right label. Disease rows get the
+    # OLS-derived canonical fields when available.
     diseases = []
     traits = []
     for a in verdict.gwas:
@@ -110,7 +162,14 @@ def _upsert_gwas_associations(tx, verdict: VariantVerdict) -> None:
             "risk_allele": a.risk_allele,
             "pmid": a.pubmed_id,
         }
-        (diseases if is_disease_uri(a.mapped_trait_uri) else traits).append(row)
+        if is_disease_uri(a.mapped_trait_uri):
+            info = (disease_norm or {}).get(a.trait, {})
+            row["mondo_id"] = info.get("mondo_id")
+            row["canonical_label"] = info.get("canonical_label")
+            row["iri_canonical"] = info.get("iri")
+            diseases.append(row)
+        else:
+            traits.append(row)
 
     if diseases:
         tx.run(
@@ -118,7 +177,10 @@ def _upsert_gwas_associations(tx, verdict: VariantVerdict) -> None:
             UNWIND $rows AS row
             MERGE (v:Variant {rsid: $rsid})
             MERGE (d:Disease {name: row.name})
-            SET d.uri = coalesce(row.uri, d.uri)
+            SET d.uri             = coalesce(row.uri, d.uri),
+                d.mondo_id        = coalesce(row.mondo_id, d.mondo_id),
+                d.canonical_label = coalesce(row.canonical_label, d.canonical_label),
+                d.iri             = coalesce(row.iri_canonical, d.iri)
             MERGE (v)-[r:HAS_GWAS_ASSOCIATION {pmid: row.pmid}]->(d)
             SET r.p_value     = row.p_value,
                 r.odds_ratio  = row.odds_ratio,
@@ -179,23 +241,39 @@ def _stats_for(verdict: VariantVerdict) -> LoadStats:
     return stats
 
 
-def load_verdict(client: Neo4jClient, verdict: VariantVerdict) -> LoadStats:
+def load_verdict(
+    client: Neo4jClient,
+    verdict: VariantVerdict,
+    *,
+    normalize_diseases: bool = True,
+) -> LoadStats:
     """Upsert a single VariantVerdict into Neo4j. Returns counts of merged
     nodes and edges (these are upper bounds: MERGE will reuse existing
-    nodes for repeated runs, so the actual delta may be smaller)."""
+    nodes for repeated runs, so the actual delta may be smaller).
+
+    If `normalize_diseases`, all disease/condition surfaces (ClinVar
+    conditions and MONDO-flagged GWAS traits) are resolved against MONDO
+    via OLS before loading, and the resulting `mondo_id`,
+    `canonical_label`, and `iri` are stored as properties on the Disease
+    nodes. Disable to skip the OLS network calls and load with name-only
+    Disease nodes (same behavior as before the normalize-stage integration).
+    """
+    disease_norm = _canonicalize_diseases(verdict) if normalize_diseases else {}
     with client.session() as session:
         session.execute_write(_upsert_variant_and_gene, verdict)
-        session.execute_write(_upsert_clinvar_conditions, verdict)
-        session.execute_write(_upsert_gwas_associations, verdict)
+        session.execute_write(_upsert_clinvar_conditions, verdict, disease_norm)
+        session.execute_write(_upsert_gwas_associations, verdict, disease_norm)
     return _stats_for(verdict)
 
 
 def load_verdicts(
     client: Neo4jClient,
     verdicts: list[VariantVerdict],
+    *,
+    normalize_diseases: bool = True,
 ) -> LoadStats:
     """Load multiple verdicts; accumulate stats."""
     total = LoadStats()
     for v in verdicts:
-        total.add(load_verdict(client, v))
+        total.add(load_verdict(client, v, normalize_diseases=normalize_diseases))
     return total
