@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from .clinvar import lookup_clinvar
 from .gwas import lookup_gwas
+from .heuristics import is_disease_uri, is_measurement_trait
 from .models import EffectDirection, VariantVerdict
 
 
@@ -42,24 +43,6 @@ def _roll_up_effect(verdict: VariantVerdict) -> EffectDirection:
     if cv and cv.effect != EffectDirection.UNKNOWN:
         return cv.effect
     return EffectDirection.UNKNOWN
-
-
-# Substrings that mark a trait as a biomarker / quantitative measurement rather
-# than a disease. Cheap heuristic; covers the long tail of EFO/OBA measurement
-# terms ("protein measurement", "phospholipid amount", "...percentage", etc.).
-_MEASUREMENT_TOKENS = ("measurement", "amount", "level", "concentration", "percentage")
-
-
-def _is_disease_uri(uri: str | None) -> bool:
-    """MONDO IDs denote diseases by construction; the strongest disease signal."""
-    return bool(uri) and "MONDO_" in uri
-
-
-def _is_measurement_trait(trait: str | None) -> bool:
-    if not trait:
-        return False
-    t = trait.lower()
-    return any(tok in t for tok in _MEASUREMENT_TOKENS)
 
 
 def _pick_summary_trait(verdict: VariantVerdict) -> str:
@@ -94,8 +77,8 @@ def _pick_summary_trait(verdict: VariantVerdict) -> str:
                 scorable = directional
 
         tiers = (
-            [g for g in scorable if _is_disease_uri(g.mapped_trait_uri)],
-            [g for g in scorable if not _is_measurement_trait(g.trait)],
+            [g for g in scorable if is_disease_uri(g.mapped_trait_uri)],
+            [g for g in scorable if not is_measurement_trait(g.trait)],
             scorable,
         )
         for tier in tiers:

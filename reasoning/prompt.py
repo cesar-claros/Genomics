@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 
+from lookup.heuristics import is_disease_uri
 from lookup.models import VariantVerdict
 
 _SYSTEM = """You are a biomedical evidence synthesizer.
@@ -69,16 +70,38 @@ def _format_clinvar(verdict: VariantVerdict) -> str:
     return "\n".join(lines)
 
 
-def _format_gwas(verdict: VariantVerdict, max_assocs: int = 10) -> str:
+def _format_gwas(verdict: VariantVerdict, max_assocs: int = 15) -> str:
+    """Format GWAS evidence with disease (MONDO) associations listed first.
+
+    Sorting purely by p-value buries clinically meaningful disease
+    associations behind pQTL / biomarker hits, which routinely reach
+    p < 1e-30 while disease hits sit at p < 1e-9. We surface ALL disease
+    hits at the top of the evidence block, then fill the remaining slots
+    with the most significant biomarker / measurement hits. The LLM reads
+    top-down, so this directly shapes which traits it leads with.
+    """
     if not verdict.gwas:
         return "GWAS Catalog: no associations found."
-    # Most significant first.
-    assocs = sorted(
-        verdict.gwas,
-        key=lambda g: g.p_value if g.p_value is not None else float("inf"),
-    )[:max_assocs]
-    lines = [f"GWAS Catalog (top {len(assocs)} by p-value):"]
-    for a in assocs:
+
+    by_p = lambda g: g.p_value if g.p_value is not None else float("inf")
+    diseases = sorted(
+        [g for g in verdict.gwas if is_disease_uri(g.mapped_trait_uri)],
+        key=by_p,
+    )
+    others = sorted(
+        [g for g in verdict.gwas if not is_disease_uri(g.mapped_trait_uri)],
+        key=by_p,
+    )
+
+    bio_slots = max(0, max_assocs - len(diseases))
+    selected = diseases + others[:bio_slots]
+
+    header = (
+        f"GWAS Catalog (showing {len(selected)} of {len(verdict.gwas)} hits; "
+        f"disease associations listed first):"
+    )
+    lines = [header]
+    for a in selected:
         bits = [f"Trait: {a.trait or '(unspecified)'}"]
         if a.p_value is not None:
             bits.append(f"p={a.p_value:.1e}")
