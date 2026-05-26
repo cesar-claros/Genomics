@@ -78,21 +78,35 @@ def _spacy_entities(text: str, model_name: str) -> tuple[list[Entity], float]:
 
 def _bert_entities(text: str, model_name: str) -> tuple[list[Entity], float]:
     pipe = _load_bert(model_name)
+
+    # Some single-type HF models (e.g. BENT) train with raw BIO labels
+    # (O / B / I, no entity-type suffix). aggregation_strategy='simple' has
+    # nothing after the '-' to strip, so entity_group comes out as 'B'.
+    # When we detect that, infer the type from the trailing segment of the
+    # model name (BENT convention: NER-<Type>).
+    id2label = list(getattr(pipe.model.config, "id2label", {}).values())
+    bio_only = bool(id2label) and set(id2label).issubset({"O", "B", "I"})
+    inferred_type = model_name.rsplit("-", 1)[-1].upper() if bio_only else None
+
     t0 = time.perf_counter()
     raw = pipe(text)
     dt = time.perf_counter() - t0
-    # Slice the original text rather than trusting BERT's `word` field
-    # (uncased models lowercase it; sub-word merges occasionally add spaces).
-    ents = [
-        Entity(
-            start=int(r["start"]),
-            end=int(r["end"]),
-            text=text[int(r["start"]):int(r["end"])],
-            label=str(r["entity_group"]),
-            score=float(r["score"]),
+
+    ents: list[Entity] = []
+    for r in raw:
+        group = str(r["entity_group"])
+        label = inferred_type if (bio_only and group in {"B", "I"}) else group
+        ents.append(
+            Entity(
+                start=int(r["start"]),
+                end=int(r["end"]),
+                # Slice the original text rather than trusting BERT's `word`
+                # (uncased models lowercase it; subword merges may add spaces).
+                text=text[int(r["start"]):int(r["end"])],
+                label=label,
+                score=float(r["score"]),
+            )
         )
-        for r in raw
-    ]
     return ents, dt
 
 
