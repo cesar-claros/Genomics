@@ -34,22 +34,29 @@ class Backend(Protocol):
 
 @lru_cache(maxsize=2)
 def _load_hf(model_name: str, dtype: str):
-    """Load tokenizer + model lazily. Cached per (model_name, dtype) pair."""
+    """Load tokenizer + model lazily. Cached per (model_name, dtype) pair.
+
+    We deliberately do NOT pass trust_remote_code=True. Phi-3 (and most other
+    modern open models) have first-class support in transformers itself
+    (Phi3ForCausalLM), and the custom modeling_phi3.py shipped on HuggingFace
+    uses an old cache API that breaks on transformers >= 4.45
+    (AttributeError: 'DynamicCache' object has no attribute 'seen_tokens').
+    Using the native implementation also enables SDPA attention by default.
+    """
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    torch_dtype = {
+    resolved_dtype = {
         "fp16": torch.float16,
         "bf16": torch.bfloat16,
         "fp32": torch.float32,
     }[dtype]
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch_dtype,
+        dtype=resolved_dtype,
         device_map="auto",
-        trust_remote_code=True,
     )
     return tokenizer, model
 
