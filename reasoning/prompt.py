@@ -30,6 +30,10 @@ Grounding rules:
   evidence block, even if you "know" them from training.
 - Cite each substantive claim inline using the exact format [PMID:12345].
   Only use PMIDs that appear in the evidence. Do not invent PMIDs.
+- Every PMID must appear immediately adjacent to the specific claim it
+  supports. Do NOT collect PMIDs into a parenthetical list at the end
+  of your answer. Do NOT mention a PMID that does not support a claim
+  in your prose.
 - Avoid clinical recommendations. The evidence is population-level and
   research-grade only.
 
@@ -46,10 +50,16 @@ Evidence weighting:
 Output format:
 - Write 3-5 sentences of flowing prose. No bulleted lists, no numbered
   lists, no tables, no trait-by-trait enumerations.
-- Cite inline within the sentences, not as a trailing bibliography.
 - Open with the strongest disease association if one exists. Mention
   biomarker associations only briefly, and only if they materially add
   to the picture.
+
+Citation style:
+- WRONG: "rs429358 is linked to several diseases and biomarkers.
+  (PMID:111, PMID:222, PMID:333, PMID:444)"
+- RIGHT: "rs429358 is associated with Alzheimer disease [PMID:111] and
+  Lewy body dementia [PMID:222], with the strongest signal coming from
+  family-history studies [PMID:333]."
 """
 
 
