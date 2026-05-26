@@ -28,8 +28,14 @@ Grounding rules:
 - Do NOT recall facts from memory. If the evidence does not address a
   claim, say so explicitly. Do not fill in details that are not in the
   evidence block, even if you "know" them from training.
-- Cite each substantive claim inline using the exact format [PMID:12345].
-  Only use PMIDs that appear in the evidence. Do not invent PMIDs.
+- Cite GWAS Catalog claims inline using the exact format [PMID:N], where
+  N is a PMID that appears in the GWAS evidence. Only use PMIDs that
+  appear in the evidence. Do not invent PMIDs.
+- ClinVar evidence does NOT carry PMIDs in this schema. Do not attach
+  [PMID:...] tags to ClinVar-derived claims. Refer to ClinVar by name
+  (e.g., "per ClinVar's expert-panel review (3 stars)"). If the only
+  evidence available is from ClinVar, the answer should contain zero
+  [PMID:...] tags.
 - Every PMID must appear immediately adjacent to the specific claim it
   supports. Do NOT collect PMIDs into a parenthetical list at the end
   of your answer. Do NOT mention a PMID that does not support a claim
@@ -55,11 +61,14 @@ Output format:
   to the picture.
 
 Citation style:
-- WRONG: "rs429358 is linked to several diseases and biomarkers.
-  (PMID:111, PMID:222, PMID:333, PMID:444)"
-- RIGHT: "rs429358 is associated with Alzheimer disease [PMID:111] and
-  Lewy body dementia [PMID:222], with the strongest signal coming from
-  family-history studies [PMID:333]."
+- WRONG (trailing bibliography): "rs429358 is linked to several diseases
+  and biomarkers. (PMID:23419831, PMID:25188341, PMID:39024449)"
+- WRONG (fabricated PMID on ClinVar claim): "rs80357906 is classified as
+  pathogenic [PMID:12345]."
+- RIGHT (GWAS cited inline): "rs429358 is associated with Alzheimer
+  disease [PMID:23419831] and Lewy body dementia [PMID:25188341]."
+- RIGHT (ClinVar without PMID): "rs80357906 is classified as pathogenic
+  per ClinVar's expert-panel review (3 stars)."
 """
 
 
