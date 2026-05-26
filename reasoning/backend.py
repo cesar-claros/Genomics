@@ -28,7 +28,7 @@ class Backend(Protocol):
 
     name: str
 
-    def generate(self, system: str, user: str, max_new_tokens: int = 512) -> str:
+    def generate(self, system: str, user: str, max_new_tokens: int = 1024) -> str:
         ...
 
 
@@ -77,7 +77,7 @@ class HuggingFaceBackend:
     def name(self) -> str:
         return f"hf:{self.model_name}"
 
-    def generate(self, system: str, user: str, max_new_tokens: int = 512) -> str:
+    def generate(self, system: str, user: str, max_new_tokens: int = 1024) -> str:
         import torch
 
         tokenizer, model = _load_hf(self.model_name, self.dtype)
