@@ -71,14 +71,23 @@ def _canonicalize_diseases(verdict: VariantVerdict) -> dict[str, dict[str, str |
     whose value carries the MONDO ID, canonical label, and IRI when
     available. Surfaces with no match map to an entry with all-None values.
 
-    Fail-soft: if the OLS API is unreachable, returns {} and Disease nodes
-    are MERGEd without canonical IDs (same as pre-integration behavior).
+    Fail-soft: if the OLS API is unreachable or the normalize package is
+    not importable, returns {} and Disease nodes are MERGEd without
+    canonical IDs (same as pre-integration behavior). The failure is
+    logged to stderr rather than fully swallowed, so silent misses are
+    easier to diagnose.
     """
+    import sys
+
     try:
         from normalize.combine import normalize_verdict_diseases
 
         normalized = normalize_verdict_diseases(verdict)
-    except Exception:  # noqa: BLE001 - fail soft
+    except Exception as e:  # noqa: BLE001 - fail soft, but log
+        print(
+            f"[kg.load] disease normalization skipped: {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
         return {}
 
     return {
