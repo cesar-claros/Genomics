@@ -1,1 +1,15 @@
-The apolipoprotein E type 4 allele (APOE-epsilon 4) is genetically associated with the common late onset familial and sporadic forms of Alzheimer's disease (AD). Risk for AD increased from 20% to 90% and mean age at onset decreased from 84 to 68 years with increasing number of APOE-epsilon 4 alleles in 42 families with late onset AD. Thus APOE-epsilon 4 gene dose is a major risk factor for late onset AD and, in these families, homozygosity for APOE-epsilon 4 was virtually sufficient to cause AD by age 80.
+INTRODUCTION: Apolipoprotein E (APOE) ε2 and ε4 alleles encoded by rs7412 and 
+rs429358 polymorphisms, respectively, are landmark contra and pro "risk" factors 
+for Alzheimer's disease (AD).
+METHODS: We examined differences in linkage disequilibrium (LD) structures 
+between (1) AD-affected and unaffected subjects and (2) older AD-unaffected and 
+younger subjects in the 19q13.3 region harboring rs7412 and rs429358.
+RESULTS: AD is associated with sex-nonspecific heterogeneous patterns of 
+decreased and increased LD of rs7412 and rs429358, respectively, with other 
+polymorphisms from five genes in this region in AD-affected subjects. The LD 
+patterns in older AD-unaffected subjects resembled those in younger individuals. 
+Polarization of the ε4- and ε2 allele-related heterogeneous LD clusters 
+differentiated cell types and implicated specific tissues in AD pathogenesis.
+DISCUSSION: Protection and predisposition to AD is characterized by an interplay 
+of rs7412 and rs429358, with multiple polymorphisms in the 19q13.3 region in a 
+tissue-specific manner, which is not driven by common evolutionary forces.
